@@ -134,10 +134,10 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
     if (_tipoPago != 'Fisico' && _tipoPago != 'Mixto') return 0;
     
     if (_moneda == PagosConfig.ambos) {
-      // Calcular total recibido en córdobas usando TC COMPRA para dólares físicos (cliente paga en dólares)
+      // Calcular total recibido en córdobas usando TC VENTA para dólares en pago mixto
       final recibidoCordobas = double.tryParse(_recibidoCordobasController.text) ?? 0;
       final recibidoDolares = double.tryParse(_recibidoDolaresController.text) ?? 0;
-      final totalRecibidoEnCordobas = recibidoCordobas + (recibidoDolares * _tcCompra);
+      final totalRecibidoEnCordobas = recibidoCordobas + (recibidoDolares * _tcVenta);
       final vuelto = totalRecibidoEnCordobas > _totalSeleccionado 
           ? totalRecibidoEnCordobas - _totalSeleccionado 
           : 0.0;
@@ -160,8 +160,8 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
   double get _totalRecibidoAmbos {
     final recibidoCordobas = double.tryParse(_recibidoCordobasController.text) ?? 0;
     final recibidoDolares = double.tryParse(_recibidoDolaresController.text) ?? 0;
-    // Usar TC COMPRA para convertir dólares físicos a córdobas (cliente paga en dólares, negocio recibe dólares)
-    final total = recibidoCordobas + (recibidoDolares * _tcCompra);
+    // Usar TC VENTA para convertir dólares a córdobas en pago mixto
+    final total = recibidoCordobas + (recibidoDolares * _tcVenta);
     return MoneyFormatter.roundToDouble(total);
   }
 
@@ -253,9 +253,11 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
               : null,
           montoRecibido: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? montoRecibido : null,
           vuelto: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _vuelto : null,
-          // Enviar TC COMPRA cuando cliente paga en dólares físicos, TC VENTA cuando es electrónico
+          // Enviar TC COMPRA cuando cliente paga solo en dólares físicos, TC VENTA cuando es mixto o electrónico
           tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) 
-              ? ((_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _tcCompra : _tcVenta)
+              ? ((_tipoPago == 'Electronico') 
+                  ? _tcVenta 
+                  : (_moneda == PagosConfig.ambos ? _tcVenta : _tcCompra))
               : null,
           observaciones: _observacionesController.text,
         );
@@ -275,9 +277,11 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
               : null,
           montoRecibido: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? montoRecibido : null,
           vuelto: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _vuelto : null,
-          // Enviar TC COMPRA cuando cliente paga en dólares físicos, TC VENTA cuando es electrónico
+          // Enviar TC COMPRA cuando cliente paga solo en dólares físicos, TC VENTA cuando es mixto o electrónico
           tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) 
-              ? ((_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _tcCompra : _tcVenta)
+              ? ((_tipoPago == 'Electronico') 
+                  ? _tcVenta 
+                  : (_moneda == PagosConfig.ambos ? _tcVenta : _tcCompra))
               : null,
           observaciones: _observacionesController.text,
         );
@@ -836,8 +840,8 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
   Widget _buildPagoAmbosMonedas(Color textColor, Color mutedColor, Color borderColor, Color cardColor) {
     final recibidoCordobas = double.tryParse(_recibidoCordobasController.text) ?? 0;
     final recibidoDolares = double.tryParse(_recibidoDolaresController.text) ?? 0;
-    // Usar TC COMPRA para calcular el total recibido en córdobas (cliente paga en dólares físicos, negocio recibe dólares)
-    final totalEnCordobas = recibidoCordobas + (recibidoDolares * _tcCompra);
+    // Usar TC VENTA para calcular el total recibido en córdobas en pago mixto
+    final totalEnCordobas = recibidoCordobas + (recibidoDolares * _tcVenta);
 
     return Container(
       padding: const EdgeInsets.all(16),
