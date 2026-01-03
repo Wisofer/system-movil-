@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>System Movil</string>
+	<string>EMSINET</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,8 +45,6 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	
-	<!-- Permisos de ubicación -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Esta app necesita acceso a tu ubicación para mostrarte trabajos y servicios cercanos en tu área.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -59,7 +57,9 @@
 	<string>Necesitamos acceder al micrófono para enviar mensajes de voz.</string>
 	
 	<!-- Google Maps API Key -->
+	<!-- IMPORTANTE: Reemplaza YOUR_API_KEY_HERE con tu propia Google Maps API Key -->
 	<key>GMSApiKey</key>
-	<string>AIzaSyDJcsz7LLqX5JTJ1G62eF7TpI7fwQgG0o0</string>
+	<string>YOUR_API_KEY_HERE</string>
 </dict>
 </plist>
+
