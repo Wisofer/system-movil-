@@ -180,7 +180,11 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
         }
       } else {
         final recibido = double.tryParse(_montoRecibidoController.text) ?? 0;
-        if (recibido < _totalSeleccionado) {
+        // Cuando paga en dólares, convertir a córdobas para comparar con el total (misma unidad)
+        final recibidoEnCordobas = _moneda == PagosConfig.dolares
+            ? recibido * _tcCompra
+            : recibido;
+        if (recibidoEnCordobas < _totalSeleccionado) {
           _showError('El monto recibido es menor al total');
           return;
         }
@@ -201,13 +205,18 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
       // Preparar montos según el tipo de moneda
       // Córdobas: se redondean a enteros
       // Dólares: mantienen decimales (NO se redondean)
-      final montoRecibido = _moneda == PagosConfig.ambos 
-          ? _totalRecibidoAmbos 
-          : (_moneda == PagosConfig.dolares
-              ? double.tryParse(_montoRecibidoController.text)  // Dólares NO se redondean
-              : (double.tryParse(_montoRecibidoController.text) != null 
-                  ? MoneyFormatter.roundToDouble(double.tryParse(_montoRecibidoController.text)!)
-                  : null));  // Córdobas SÍ se redondean
+      // Para Recaudado/Historial: en pago físico/mixto enviamos lo que REALMENTE se cobra (total a pagar),
+      // no lo que el cliente entregó. Ej: cliente paga 1000, total 920 → recaudado = 920 (el vuelto no cuenta).
+      final esFisicoOMixto = _tipoPago == 'Fisico' || _tipoPago == 'Mixto';
+      final montoRecibidoParaApi = esFisicoOMixto
+          ? _totalSeleccionado  // Lo que se queda en caja
+          : (_moneda == PagosConfig.ambos
+              ? _totalRecibidoAmbos
+              : (_moneda == PagosConfig.dolares
+                  ? double.tryParse(_montoRecibidoController.text)
+                  : (double.tryParse(_montoRecibidoController.text) != null
+                      ? MoneyFormatter.roundToDouble(double.tryParse(_montoRecibidoController.text)!)
+                      : null)));
       
       final recibidoCordobas = _moneda == PagosConfig.ambos
           ? (double.tryParse(_recibidoCordobasController.text) != null
@@ -251,7 +260,7 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
           montoDolaresElectronico: _tipoPago == 'Electronico' && _moneda == PagosConfig.dolares 
               ? (_totalSeleccionado / _tcVenta)  // Convertir córdobas a dólares (con decimales)
               : null,
-          montoRecibido: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? montoRecibido : null,
+          montoRecibido: esFisicoOMixto ? montoRecibidoParaApi : null,
           vuelto: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _vuelto : null,
           // Enviar TC COMPRA cuando cliente paga solo en dólares físicos, TC VENTA cuando es mixto o electrónico
           tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) 
@@ -275,7 +284,7 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
           montoDolaresElectronico: _tipoPago == 'Electronico' && _moneda == PagosConfig.dolares 
               ? (_totalSeleccionado / _tcVenta)  // Convertir córdobas a dólares (con decimales)
               : null,
-          montoRecibido: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? montoRecibido : null,
+          montoRecibido: esFisicoOMixto ? montoRecibidoParaApi : null,
           vuelto: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _vuelto : null,
           // Enviar TC COMPRA cuando cliente paga solo en dólares físicos, TC VENTA cuando es mixto o electrónico
           tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) 
