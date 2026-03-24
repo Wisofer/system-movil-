@@ -12,28 +12,21 @@ class PagosService {
   // TIPO DE CAMBIO
   // ============================================================================
 
-  /// Obtener tipo de cambio actual USD/NIO
-  Future<TipoCambio> getTipoCambio() async {
+  /// Obtener tipo de cambio actual USD/NIO desde el API.
+  /// Los valores los define el backend (configuración Compra/Venta del negocio);
+  /// la app solo usa lo que devuelve el API, sin inventar números.
+  /// Retorna null si falla la petición o el API no indica success.
+  Future<TipoCambio?> getTipoCambio() async {
     try {
       final response = await _dio.get('/pagos/tipo-cambio');
 
-      if (response.data['success'] == true) {
-        return TipoCambio.fromJson(response.data['data']);
+      if (response.data['success'] == true && response.data['data'] != null) {
+        return TipoCambio.fromJson(response.data['data'] as Map<String, dynamic>);
       }
-      return _defaultTipoCambio();
+      return null;
     } on DioException {
-      return _defaultTipoCambio();
+      return null;
     }
-  }
-
-  TipoCambio _defaultTipoCambio() {
-    return TipoCambio(
-      compra: 36.32,
-      venta: 36.80,
-      tipoCambio: 36.80,
-      monedaBase: 'USD',
-      monedaDestino: 'NIO',
-    );
   }
 
   // ============================================================================
@@ -116,13 +109,19 @@ class PagosService {
         if (observaciones != null && observaciones.isNotEmpty) 'observaciones': observaciones,
       };
 
+      print('[PAGOS] Registrando pago individual → facturaId=$facturaId monto=$monto moneda=$moneda tipoPago=$tipoPago');
+      print('[PAGOS] Body enviado: $body');
+
       final response = await _dio.post('/pagos', data: body);
-      
+
       if (response.data['success'] == true) {
+        print('[PAGOS] Pago individual OK → data: ${response.data['data']}');
         return response.data['data'];
       }
+      print('[PAGOS] Pago individual falló → response: ${response.data}');
       return null;
-    } on DioException {
+    } on DioException catch (e) {
+      print('[PAGOS] Error al registrar pago individual: ${e.message}');
       return null;
     }
   }
@@ -162,13 +161,19 @@ class PagosService {
         if (observaciones != null && observaciones.isNotEmpty) 'observaciones': observaciones,
       };
 
+      print('[PAGOS] Registrando pago múltiple → facturaIds=$facturaIds montoTotal=$montoTotal moneda=$moneda tipoPago=$tipoPago');
+      print('[PAGOS] Body enviado: $body');
+
       final response = await _dio.post('/pagos/multiples', data: body);
-      
+
       if (response.data['success'] == true) {
+        print('[PAGOS] Pago múltiple OK → data: ${response.data['data']}');
         return response.data['data'];
       }
+      print('[PAGOS] Pago múltiple falló → response: ${response.data}');
       return null;
-    } on DioException {
+    } on DioException catch (e) {
+      print('[PAGOS] Error al registrar pago múltiple: ${e.message}');
       return null;
     }
   }

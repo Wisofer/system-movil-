@@ -125,27 +125,26 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
     return MoneyFormatter.roundToDouble(total);
   }
 
-  // TC Compra: cuando cliente paga en dólares físicos (el negocio RECIBE dólares)
-  double get _tcCompra => _tipoCambio?.compra ?? 36.32;
-  // TC Venta: para mostrar equivalentes y cálculos generales
-  double get _tcVenta => _tipoCambio?.venta ?? 36.80;
+  // Tipo de cambio lo define el API (config Compra/Venta del negocio). Sin valores inventados.
+  // El backend usa "Venta" para convertir cuando el cliente paga en dólares; usamos ese mismo valor.
+  double get _tcPagoDolares => _tipoCambio?.venta ?? 0.0;
 
   double get _vuelto {
     if (_tipoPago != 'Fisico' && _tipoPago != 'Mixto') return 0;
     
     if (_moneda == PagosConfig.ambos) {
-      // Calcular total recibido en córdobas usando TC VENTA para dólares en pago mixto
+      // Mismo TC que el backend para dólares (valor Venta del API)
       final recibidoCordobas = double.tryParse(_recibidoCordobasController.text) ?? 0;
       final recibidoDolares = double.tryParse(_recibidoDolaresController.text) ?? 0;
-      final totalRecibidoEnCordobas = recibidoCordobas + (recibidoDolares * _tcVenta);
+      final totalRecibidoEnCordobas = recibidoCordobas + (recibidoDolares * _tcPagoDolares);
       final vuelto = totalRecibidoEnCordobas > _totalSeleccionado 
           ? totalRecibidoEnCordobas - _totalSeleccionado 
           : 0.0;
       return MoneyFormatter.roundToDouble(vuelto.toDouble());
     } else if (_moneda == PagosConfig.dolares) {
-      // Si paga solo en dólares físicos, convertir con TC COMPRA (cliente paga en dólares, negocio recibe dólares)
+      // Mismo TC que el backend: valor Venta (cuando el cliente paga en dólares)
       final recibido = double.tryParse(_montoRecibidoController.text) ?? 0;
-      final recibidoEnCordobas = recibido * _tcCompra;
+      final recibidoEnCordobas = recibido * _tcPagoDolares;
       final vuelto = recibidoEnCordobas > _totalSeleccionado 
           ? recibidoEnCordobas - _totalSeleccionado 
           : 0.0;
@@ -160,8 +159,8 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
   double get _totalRecibidoAmbos {
     final recibidoCordobas = double.tryParse(_recibidoCordobasController.text) ?? 0;
     final recibidoDolares = double.tryParse(_recibidoDolaresController.text) ?? 0;
-    // Usar TC VENTA para convertir dólares a córdobas en pago mixto
-    final total = recibidoCordobas + (recibidoDolares * _tcVenta);
+    // Mismo TC que el backend para dólares (valor Venta del API)
+    final total = recibidoCordobas + (recibidoDolares * _tcPagoDolares);
     return MoneyFormatter.roundToDouble(total);
   }
 
@@ -171,20 +170,28 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
       return;
     }
 
+    // El tipo de cambio lo define el API; sin él no podemos registrar pago en dólares
+    if ((_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) &&
+        (_tipoCambio == null || _tcPagoDolares <= 0)) {
+      _showError('No se pudo cargar el tipo de cambio. Revisa tu conexión e intenta de nuevo.');
+      return;
+    }
+
     // Validar monto recibido según el tipo de moneda
+    const toleranciaCordobas = 0.01; // 1 centavo: evita errores de precisión con doubles
     if (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') {
       if (_moneda == PagosConfig.ambos) {
-        if (_totalRecibidoAmbos < _totalSeleccionado) {
+        if (_totalRecibidoAmbos < _totalSeleccionado - toleranciaCordobas) {
           _showError('El monto total recibido es menor al total a pagar');
           return;
         }
       } else {
         final recibido = double.tryParse(_montoRecibidoController.text) ?? 0;
-        // Cuando paga en dólares, convertir a córdobas para comparar con el total (misma unidad)
+        // Cuando paga en dólares: usar el mismo TC que el backend (valor Venta del API)
         final recibidoEnCordobas = _moneda == PagosConfig.dolares
-            ? recibido * _tcCompra
+            ? recibido * _tcPagoDolares
             : recibido;
-        if (recibidoEnCordobas < _totalSeleccionado) {
+        if (recibidoEnCordobas < _totalSeleccionado - toleranciaCordobas) {
           _showError('El monto recibido es menor al total');
           return;
         }
@@ -197,6 +204,8 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
     }
 
     setState(() => _isProcessingPago = true);
+    final nFacturas = _facturasSeleccionadas.length;
+    print('[PAGOS] Intentando registrar pago (${nFacturas == 1 ? "1 factura" : "$nFacturas facturas"}) total=$_totalSeleccionado $_moneda tipo=$_tipoPago');
 
     try {
       final pagosService = ref.read(pagosServiceProvider);
@@ -258,16 +267,12 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
           montoDolaresFisico: montoDolaresFisico,
           montoCordobasElectronico: _tipoPago == 'Electronico' && _moneda == PagosConfig.cordobas ? _totalSeleccionado : null,
           montoDolaresElectronico: _tipoPago == 'Electronico' && _moneda == PagosConfig.dolares 
-              ? (_totalSeleccionado / _tcVenta)  // Convertir córdobas a dólares (con decimales)
+              ? (_totalSeleccionado / _tcPagoDolares)  // Convertir córdobas a dólares
               : null,
           montoRecibido: esFisicoOMixto ? montoRecibidoParaApi : null,
           vuelto: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _vuelto : null,
-          // Enviar TC COMPRA cuando cliente paga solo en dólares físicos, TC VENTA cuando es mixto o electrónico
-          tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) 
-              ? ((_tipoPago == 'Electronico') 
-                  ? _tcVenta 
-                  : (_moneda == PagosConfig.ambos ? _tcVenta : _tcCompra))
-              : null,
+          // Mismo TC que el backend para pago en dólares = valor Venta del API
+          tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) ? _tcPagoDolares : null,
           observaciones: _observacionesController.text,
         );
       } else {
@@ -282,16 +287,12 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
           montoDolaresFisico: montoDolaresFisico,
           montoCordobasElectronico: _tipoPago == 'Electronico' && _moneda == PagosConfig.cordobas ? _totalSeleccionado : null,
           montoDolaresElectronico: _tipoPago == 'Electronico' && _moneda == PagosConfig.dolares 
-              ? (_totalSeleccionado / _tcVenta)  // Convertir córdobas a dólares (con decimales)
+              ? (_totalSeleccionado / _tcPagoDolares)  // Convertir córdobas a dólares
               : null,
           montoRecibido: esFisicoOMixto ? montoRecibidoParaApi : null,
           vuelto: (_tipoPago == 'Fisico' || _tipoPago == 'Mixto') ? _vuelto : null,
-          // Enviar TC COMPRA cuando cliente paga solo en dólares físicos, TC VENTA cuando es mixto o electrónico
-          tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) 
-              ? ((_tipoPago == 'Electronico') 
-                  ? _tcVenta 
-                  : (_moneda == PagosConfig.ambos ? _tcVenta : _tcCompra))
-              : null,
+          // Mismo TC que el backend para pago en dólares = valor Venta del API
+          tipoCambio: (_moneda == PagosConfig.dolares || _moneda == PagosConfig.ambos) ? _tcPagoDolares : null,
           observaciones: _observacionesController.text,
         );
       }
@@ -850,7 +851,7 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
     final recibidoCordobas = double.tryParse(_recibidoCordobasController.text) ?? 0;
     final recibidoDolares = double.tryParse(_recibidoDolaresController.text) ?? 0;
     // Usar TC VENTA para calcular el total recibido en córdobas en pago mixto
-    final totalEnCordobas = recibidoCordobas + (recibidoDolares * _tcVenta);
+    final totalEnCordobas = recibidoCordobas + (recibidoDolares * _tcPagoDolares);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -956,7 +957,7 @@ class _RegistrarPagoScreenState extends ConsumerState<RegistrarPagoScreen> {
                       ),
                       child: Text(
                         // Usar TC VENTA para mostrar equivalente en dólares (mantiene decimales)
-                        MoneyFormatter.formatDolares(_totalSeleccionado / _tcVenta),
+                        MoneyFormatter.formatDolares(_totalSeleccionado / _tcPagoDolares),
                         style: GoogleFonts.inter(
                           color: mutedColor,
                           fontWeight: FontWeight.w600,

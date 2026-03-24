@@ -228,10 +228,17 @@ class ResumenFacturasCliente {
   }
 }
 
+/// Tipo de cambio devuelto por el API. Los valores los configura el negocio en el sistema
+/// (Compra / Venta) y el backend los devuelve; la app no inventa ni hardcodea números.
 class TipoCambio {
-  final double compra;      // Usar cuando cliente paga en dólares
-  final double venta;       // Usar para mostrar equivalentes
-  final double tipoCambio;  // Por compatibilidad (= venta)
+  /// Valor "Compra" del sistema (lo devuelve el API).
+  final double compra;
+  /// Valor "Venta" del sistema. El backend usa este valor para convertir cuando el
+  /// cliente paga en dólares y para equivalentes; la app debe usar este campo para
+  /// el monto del pago y conversiones en pagos en dólares.
+  final double venta;
+  /// Mismo valor que venta; el API puede enviarlo como venta o tipoCambio.
+  final double tipoCambio;
   final String monedaBase;
   final String monedaDestino;
   final String? simboloBase;
@@ -250,17 +257,23 @@ class TipoCambio {
   });
 
   factory TipoCambio.fromJson(Map<String, dynamic> json) {
-    final venta = (json['venta'] ?? json['tipoCambio'] ?? 36.80).toDouble();
+    final ventaRaw = json['venta'] ?? json['tipoCambio'];
+    if (ventaRaw == null) {
+      throw ArgumentError('El API debe enviar venta o tipoCambio en tipo-cambio');
+    }
+    final venta = (ventaRaw as num).toDouble();
+    final compraRaw = json['compra'];
+    final compra = compraRaw != null ? (compraRaw as num).toDouble() : venta;
     return TipoCambio(
-      compra: (json['compra'] ?? venta).toDouble(),
+      compra: compra,
       venta: venta,
-      tipoCambio: (json['tipoCambio'] ?? venta).toDouble(),
-      monedaBase: json['monedaBase'] ?? 'USD',
-      monedaDestino: json['monedaDestino'] ?? 'NIO',
-      simboloBase: json['simboloBase'] ?? '\$',
-      simboloDestino: json['simboloDestino'] ?? 'C\$',
-      ultimaActualizacion: json['ultimaActualizacion'] != null 
-          ? DateTime.tryParse(json['ultimaActualizacion']) 
+      tipoCambio: (json['tipoCambio'] as num?)?.toDouble() ?? venta,
+      monedaBase: json['monedaBase'] as String? ?? 'USD',
+      monedaDestino: json['monedaDestino'] as String? ?? 'NIO',
+      simboloBase: json['simboloBase'] as String?,
+      simboloDestino: json['simboloDestino'] as String?,
+      ultimaActualizacion: json['ultimaActualizacion'] != null
+          ? DateTime.tryParse(json['ultimaActualizacion'].toString())
           : null,
     );
   }
